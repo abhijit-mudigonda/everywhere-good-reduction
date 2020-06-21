@@ -11,88 +11,55 @@ DATA_DIR="/home/abhijitm/research/nt/matschke_elliptic/s-unit-equations/elliptic
 
 parser = argparse.ArgumentParser()
 parser.add_argument("d", type = int, action = "store", help = "the degree of extension")
+parser.add_argument("--datadir", type = str, action = "store", default = DATA_DIR, help = "where to find the .sobj files") 
 args = parser.parse_args()
 
 d = args.d
+datadir = args.datadir
 
-print([filename for filename in os.listdir(DATA_DIR) if filename.startswith("curves_deg_" + str(d) + "_Dmax") and filename.split('.')[1] == "sobj"])    
+print([filename for filename in os.listdir(datadir) if filename.startswith("curves_deg_" + str(d) + "_Dmax") and filename.split('.')[1] == "sobj"])    
 
-data_file_name = [filename for filename in os.listdir(DATA_DIR) if filename.startswith("curves_deg_" + str(d) + "_Dmax") and filename.split('.')[1] == "sobj"][-1]    
+data_file_name = [filename for filename in os.listdir(datadir) if filename.startswith("curves_deg_" + str(d) + "_Dmax") and filename.split('.')[1] == "sobj"][-1]    
 X = int(data_file_name.split('.')[0].split('_')[4][:-1])
-L = load(DATA_DIR+data_file_name)
+L = load(datadir+data_file_name)
 
 #Go through the list, marking a particular discriminant norm when you have a real (resp. imaginary) field of this 
 #discriminant. At the end, generate the cumulative sum. 
 
 discs = [[] for i in range(floor(d/2)+1)]
-j_invariants = [[] for i in range(floor(d/2)+1)]
+
+
+nf_at_sig = [0]*(floor(d/2)+1)
+curves_at_sig = [0]*(floor(d/2)+1)
+j_invariants = [{} for i in range(floor(d/2)+1)]
 
 P.<x> = QQ[]
+blah = 0
 ctr = 0
 for i in range(len(L[1])):
     ctr += 1
     K.<theta_K> = NumberField(P(L[1][i][0][3]))
+    nf_at_sig[K.signature()[1]] += 1
 
     for j in range(len(L[1][i][1])):
         E = EllipticCurve([-27*K(L[1][i][1][j][0]), -54*K(L[1][i][1][j][1])])
-        j_invariants[K.signature()[1]].append(E.j_invariant())
+        j_inv = str(E.j_invariant())
+        if j_inv in j_invariants[K.signature()[1]]:
+            j_invariants[K.signature()[1]][j_inv] += 1
+        else:
+            j_invariants[K.signature()[1]][j_inv] = 1
 
-    discs[K.signature()[1]].append((abs(K.absolute_discriminant()), len(L[1][i][1])))
-
-sums = []
-cumes = np.ndarray(shape=(floor(d/2)+1,X+1,2), dtype = int)
-
-x = list(range(X+1))
-
-for i in range(floor(d/2)+1):
-    discs[i].sort()
-    nf_cume = 0
-    curve_cume = 0
-    idx = 0
-    for j in range(X+1):
-        while idx < len(discs[i]) and discs[i][idx][0] <= j:
-            idx += 1
-            nf_cume += 1
-            curve_cume += discs[i][idx][1]
-
-        cumes[i,j,0] = nf_cume
-        cumes[i,j,1] = curve_cume
-
-    sums.append(len(discs[i]))
-
-    y = cumes[i,:,0]
-    plt.plot(x,y)
+        curves_at_sig[K.signature()[1]] += 1
 
 
-
-#Outputs
-# - Cumulative graphs for curve and number field counts at each degree. 
-# - Histogram for curve and number field counts at each degree
-#_- Histogram for most common j-invariants at each degree
-
-
-plt.savefig("./myplot.png")
-print(sums)
+plt.bar(list(range(floor(d/2)+1)), nf_at_sig, tick_label = ["("+str(d-2*s)+","+str(s)+")" for s in range(0,floor(d/2)+1)])
+plt.savefig("degree_"+str(d)+"_nf_at_sig.png")
+plt.bar(list(range(floor(d/2)+1)), curves_at_sig, tick_label = ["("+str(d-2*s)+","+str(s)+")" for s in range(0,floor(d/2)+1)])
+plt.savefig("degree_"+str(d)+"_curves_at_sig.png")
 
 
-#Want a histogram of sums and also graphs of cumulative things to see bounds
-
-
-plt.bar(list(range(floor(d/2)+1)), sums, tick_label = ["("+str(d-2*s)+","+str(s)+")" for s in range(0,floor(d/2)+1)])
-plt.savefig("./myhist.png")
-
-
-
-#List out most common j-invariants
-
-
-
-
-
-
-
-
-
+for j_sig in j_invariants:
+    print(sorted([(j, j_sig[j]) for j in j_sig.keys()], key = lambda x: x[1], reverse = True)[:20])
 
 
 
