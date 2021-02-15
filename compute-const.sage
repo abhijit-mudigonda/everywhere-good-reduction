@@ -1,12 +1,15 @@
 import argh
 from tqdm import tqdm
 from typing import List, Set, Any, Dict, TextIO
-from itertools import cycle
+from itertools import chain
 import pickle
+from os import rename
+import sys
 
-A_RANGE = 100000
+R_RANGE = 100000000000000
 D_RANGE = 6000
 Q_RANGE = 1000
+CHUNK_SIZE = 500000
 
 def evaluateChi(d: int, n: int) -> float:
     """
@@ -104,10 +107,10 @@ def squarefreePart(r: int) -> int:
     """
     F_1 = factor(r-12)
     F_2 = factor(r**2+12*r+144)
-    d = one
+    d = 1
     e_2 = 0
     e_3 = 0
-    for (pp, e) in F_1+F_2:
+    for (pp, e) in chain(F_1,F_2):
         if pp == 2:
             e_2 += e
         elif pp == 3:
@@ -118,9 +121,11 @@ def squarefreePart(r: int) -> int:
         d *= 2
     if e_3 % 2:
         d *= 3
+    if r < 12:
+        d = -d
     return d
 
-@parallel(12)
+#@parallel(12)
 def computeGoodDHelper(r: int, fout: TextIO, mode: int):
     """
         Helper function that will be parallelized
@@ -156,7 +161,69 @@ def iterator(x):
     for i in range(x):
         yield i
 
-def computeGoodD(r_range = R_RANGE, text_outfile = "", pickle_outfile = "") -> List[int]:
+def computeGoodD(r_range = R_RANGE):
+    """
+        Iterates through all r in [-r_RANGE, r_RANGE] and computes the 
+        set of distinct squarefree parts (see above) of r^3-1728 which appear. 
+        Writes them to a file.
+    """
+
+    print("Computing good d")
+    d_count = 0 #Upper bound on the number of good d
+    try:
+        with open("good-d.pickle", 'ab') as f_pickle:
+            for i in range(ceil(R_RANGE/CHUNK_SIZE)):
+                print("i is: ", i)
+                good_d = set()
+                for r in tqdm(chain(range(CHUNK_SIZE*i, CHUNK_SIZE*(i+1)), range(-CHUNK_SIZE*(i+1)+1, -CHUNK_SIZE*i+1))):
+                    if not ((r % 2 == 0) and (r % 16 != 0)  and (r % 16 != 4)):
+                        if not ((r % 3 == 0) and (r % 27 != 12)):
+                            d = squarefreePart(r)
+                            if d != 0:
+                                good_d.add(d)
+                d_count += len(good_d)
+                print("Writing to file, do not interrupt")
+                pickle.dump(good_d, f_pickle)
+    except KeyboardInterrupt:
+        print("You interrupted! How rude :<")
+        print("I got up to |r| at least", i*CHUNK_SIZE)
+        print("The number of good d so far is at most", d_count+len(good_d))
+
+        print("Dumping")
+        with open("good-d.pickle", 'ab') as f_pickle:
+            pickle.dump(good_d, f_pickle)
+        print("Renaming")
+        rename("good-d.pickle",f"nu-good-d-{i*CHUNK_SIZE}.pickle")
+        sys.exit(0)
+
+
+def loadGoodD(infile: str) -> List[int]:
+    """
+        infile: The input pickle file from which to load, built by computeGoodD
+    """
+    R = []
+    for char in infile:
+        if char.isdigit():
+            R.append(char)
+    R = int(''.join(R))
+    N = R/(CHUNK_SIZE)
+
+    good_d = set()
+    d_count = 0
+    with open(infile, 'rb') as fin:
+        for i in range(N+1):
+            print(i)
+            new_good_d = pickle.load(fin)
+            d_count += len(new_good_d)
+            good_d = union(good_d, new_good_d)
+    print("The number of non-distinct items I loaded is", d_count)
+    print("The number of distinct good d is", len(good_d))
+    good_d = list(good_d).sort()
+    return good_d
+
+
+
+def computeGoodDParallel(r_range = R_RANGE, text_outfile = "", pickle_outfile = "") -> List[int]:
     """
         Iterates through all r in [-R_RANGE, R_RANGE] and computes the 
         set of distinct squarefree parts (see above) of r^3-1728 which appear. 
@@ -164,7 +231,7 @@ def computeGoodD(r_range = R_RANGE, text_outfile = "", pickle_outfile = "") -> L
     """
     print("Computing good d")
 
-    with open(text_outfile, 'w') as f_txt, open(pickle_outfile, 'wb' as f_pickle):
+    with open(text_outfile, 'w') as f_txt, open(pickle_outfile, 'wb') as f_pickle:
         try:
             good_d = computeGoodDHelper(chain(range(block_size*i, block_size*(i+1)), range(-block_size*(i+1)+1, -block_size*i+1)))
             good_d = list(set(good_d)).sort()
@@ -233,4 +300,4 @@ def testConj(D_FLR = 2500, infile = "good-d.pickle"):
     print([float(pos_sum[k]/pos_sum[2]) for k in range(0,8)])
     print([float(neg_sum[k]/neg_sum[2]) for k in range(0,8)])
 
-argh.dispatch_commands([computeConstant, evaluateChi, computeGoodD, refABC, bridgeSum, testConj])
+argh.dispatch_commands([computeConstant, evaluateChi, computeGoodD, refABC, bridgeSum, testConj, squarefreePart, loadGoodD])

@@ -1,3 +1,4 @@
 *.sage.py
 .ipynb_checkpoints/*
+*.pickle
 
