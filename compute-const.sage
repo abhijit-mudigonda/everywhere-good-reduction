@@ -1,12 +1,12 @@
 import argh
 from tqdm import tqdm
-from typing import List, Set, Any, Dict
+from typing import List, Set, Any, Dict, TextIO
+from itertools import cycle
 import pickle
 
 A_RANGE = 100000
 D_RANGE = 6000
 Q_RANGE = 1000
-
 
 def evaluateChi(d: int, n: int) -> float:
     """
@@ -95,28 +95,86 @@ def computeConstantForD(d: int, sign: str, q_range: int) -> float:
     return computeFirstConstant(d, q_range) * computeRemainingConstant(d,sign)/(abs(d)*2**(len(list(factor(d)))))
 
 
-def computeGoodD(a_range = A_RANGE, d_range = D_RANGE, outfile = "") -> List[int]:
-    good_d = set()
-    print("Computing good d")
-    for A in tqdm(range(-a_range, a_range)):
-        if not ((A % 2 == 0) and (A % 16 != 0)  and (A % 16 != 4)):
-            if not ((A % 3 == 0) and (A % 27 != 12)):
-                d = squarefree_part(A**3-1728)
-                if d == 0:
-                    continue
-                elif mode == 1 and ((d % 4 == 1 and sgn(d) < 0) or (d % 4 != 1 and sgn(d) > 0)):
-                    continue
-                else:
-                    if abs(d) <= d_range:
-                        good_d.add(d)
+def squarefreePart(r: int) -> int:
+    """
+        Computes the squarefree part of f(r) = r^3-1728. 
+        The squarefree part of an integer n is the unique squarefree d such that n = dt^2
+
+        Since f(r) = (r-12)(r^2+12r+144) we factor these two separately to improve runtime
+    """
+    F_1 = factor(r-12)
+    F_2 = factor(r**2+12*r+144)
+    d = one
+    e_2 = 0
+    e_3 = 0
+    for (pp, e) in F_1+F_2:
+        if pp == 2:
+            e_2 += e
+        elif pp == 3:
+            e_3 += e
+        elif e%2:
+            d *= pp
+    if e_2 % 2:
+        d *= 2
+    if e_3 % 2:
+        d *= 3
+    return d
+
+@parallel(12)
+def computeGoodDHelper(r: int, fout: TextIO, mode: int):
+    """
+        Helper function that will be parallelized
+    """
+    if not ((r % 2 == 0) and (r % 16 != 0)  and (r % 16 != 4)):
+        if not ((r % 3 == 0) and (r % 27 != 12)):
+            d = squarefreePart(r)
+            if d != 0:
+                return d
+
+
+def writeGoodDToFileAndReturnList(good_d: Set[int], text_outfile: str, pickle_outfile: str) -> List[int]:
     good_d = list(good_d)
     good_d.sort()
-    print(len(good_d))
-    if outfile == "":
-        outfile = f"good-d-{a_range}.pickle"
-    with open(outfile, 'wb') as fout: 
-        pickle.dump(good_d, fout)
+    print("The number of good d is: ", len(good_d))
+
+    if text_outfile == "":
+        text_outfile = f"good-d-{r_range}.txt"
+    if pickle_outfile == "":
+        pickle_outfile = f"good-d-{r_range}.pickle"
+
+        print("Writing text output file")
+        for d in tqdm(good_d):
+            f.write(f"{d}\n")
+        f.flush()
+    with open(pickle_outfile, 'wb') as f:
+        print("Writing pickle output file")
+        pickle.dump(good_d, f)
+
     return good_d
+
+def iterator(x):
+    for i in range(x):
+        yield i
+
+def computeGoodD(r_range = R_RANGE, text_outfile = "", pickle_outfile = "") -> List[int]:
+    """
+        Iterates through all r in [-R_RANGE, R_RANGE] and computes the 
+        set of distinct squarefree parts (see above) of r^3-1728 which appear. 
+        Writes them to a file.
+    """
+    print("Computing good d")
+
+    with open(text_outfile, 'w') as f_txt, open(pickle_outfile, 'wb' as f_pickle):
+        try:
+            good_d = computeGoodDHelper(chain(range(block_size*i, block_size*(i+1)), range(-block_size*(i+1)+1, -block_size*i+1)))
+            good_d = list(set(good_d)).sort()
+
+        except KeyboardInterrupt:
+            print("You interrupted! How rude :<")
+            print("I got up to r = ", r)
+            writeGoodDToFileAndReturnList(good_d, text_outfile, pickle_outfile)
+
+    return writeGoodDToFileAndReturnList(good_d, text_outfile, pickle_outfile)
 
 def computeConstant(sign: str, infile = "good-d.pickle", q_range = Q_RANGE) -> float:
     assert(sign == 'r' or sign == 'i')
