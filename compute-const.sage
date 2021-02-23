@@ -10,10 +10,37 @@ R_RANGE = 100000000000000
 D_RANGE = 6000
 Q_RANGE = 1000
 CHUNK_SIZE = 500000
+BOUND_ON_C_PRIME_D = (1/4+((euler_gamma+ln(4))/log(x)) + ((euler_gamma)*ln(4)/((log(x))^2)))*(sqrt(log(x))/(2*x))
+abs_const = 1/(gamma(1/2)*zeta(2)**(1/2))
+
+class computeConstForD: 
+    abs_const = 1/(gamma(1/2)*zeta(2)**(1/2))
+
+    def __init__(self, d: int, sgn: str, q_range = Q_RANGE):
+        self.d = d
+        self.sgn = sgn
+        self.q_range = q_range
+        eps_d = 1 if d%4 == 1 else -1
+        self.kronecker_d = kronecker_character(eps_d*d)
+        self.conductor = d if d%2 == 1 else 4*d
+
+
+
+
+    def evaluateChi(self, n: int):
+        if (d % 8 == 3 or d % 8 == 5) and n % 2 == 0:
+            return self.kronecker_d(n/2)
+        else:
+            return self.kronecker_d(n)
+
+
+
+
+
 
 def evaluateChi(d: int, n: int) -> float:
     """
-        Evaluate the character
+        Evaluate the character chi_d(n)
     """
     if d%4 == 1:
         eps_d = 1
@@ -26,7 +53,7 @@ def evaluateChi(d: int, n: int) -> float:
     return prod
 
 def computeLocalConst(d: int) -> float:
-    #Compute the value of L(chi_d, 1)\prod_{q | m} (1+1/q)
+    #Compute the value of L(chi_d, 1)^{1/2}\prod_{q | m} (1+1/q)^{-1/2}
     if d%2 == 1:
         m = abs(d)
     else:
@@ -42,28 +69,30 @@ def computeLocalConst(d: int) -> float:
     local_prod = 1.0
     m_factors = [tup[0] for tup in list(factor(m))]
     for fac in m_factors:
-        local_prod *= (1+1/fac)
+        local_prod *= (fac/(fac+1))
 
-    return local_prod * l_value
+    return sqrt(local_prod * l_value)
 
 def computeAnnoyingProduct(d: int, q_range: int) -> float:
     prod = 1.0
     for p in primes_first_n(q_range): 
         if evaluateChi(d,p) == 1:
-            prod *= (1-1/p**2)
+            prod *= (1-1/(p**2))
     return prod
 
 def computeFirstConstant(d: int, q_range: int) -> float: 
     #Compute the constant associated to the first rule of Setzer
-    #This is the constant from Lemma 5.2 of the paper. 
+    #This is c'_d in the paper
 
     abs_const = 1/(gamma(1/2)*zeta(2)**(1/2))
-    local_const = computeLocalConst(d)**(1/2)
+    local_const = computeLocalConst(d)
     annoying_const = computeAnnoyingProduct(d, q_range)**(1/2)
 
     return abs_const * local_const * annoying_const 
 
-def computeRemainingConstant(d: int, sign: str) -> float:
+def computeSecondConstant(d: int, sign: str) -> float:
+    #Compute the constant coming from the rest of the rules of Setzer
+    #this is c''_d in the paper
     if sign == "r":
         if d % 8 == 1 or d % 8 == 7:
             return 11/12
@@ -87,18 +116,16 @@ def computeRemainingConstant(d: int, sign: str) -> float:
             return 1/6
         elif d % 8 == 5 and d > 0:
             return 2/3
-        elif d % 8 == 2 and d < 0:
-            return 1/8
-        elif d % 8 == 6 and d < 0:
+        elif (d % 8 == 2 or d % 8 == 6) and d < 0:
             return 1/8
         else:
             return 0
             
 def computeConstantForD(d: int, sign: str, q_range: int) -> float:
-    return computeFirstConstant(d, q_range) * computeRemainingConstant(d,sign)/(abs(d)*2**(len(list(factor(d)))))
+    return computeFirstConstant(d, q_range) * computeSecondConstant(d,sign)/(abs(d)*2**(len(list(factor(d)))))
 
 
-def squarefreePart(r: int) -> int:
+def squarefreePartOfMordell(r: int) -> int:
     """
         Computes the squarefree part of f(r) = r^3-1728. 
         The squarefree part of an integer n is the unique squarefree d such that n = dt^2
@@ -124,17 +151,6 @@ def squarefreePart(r: int) -> int:
     if r < 12:
         d = -d
     return d
-
-#@parallel(12)
-def computeGoodDHelper(r: int, fout: TextIO, mode: int):
-    """
-        Helper function that will be parallelized
-    """
-    if not ((r % 2 == 0) and (r % 16 != 0)  and (r % 16 != 4)):
-        if not ((r % 3 == 0) and (r % 27 != 12)):
-            d = squarefreePart(r)
-            if d != 0:
-                return d
 
 
 def writeGoodDToFileAndReturnList(good_d: Set[int], text_outfile: str, pickle_outfile: str) -> List[int]:
@@ -178,7 +194,7 @@ def computeGoodD(r_range = R_RANGE):
                 for r in tqdm(chain(range(CHUNK_SIZE*i, CHUNK_SIZE*(i+1)), range(-CHUNK_SIZE*(i+1)+1, -CHUNK_SIZE*i+1))):
                     if not ((r % 2 == 0) and (r % 16 != 0)  and (r % 16 != 4)):
                         if not ((r % 3 == 0) and (r % 27 != 12)):
-                            d = squarefreePart(r)
+                            d = squarefreePartOfMordell(r)
                             if d != 0:
                                 good_d.add(d)
                 d_count += len(good_d)
@@ -193,111 +209,39 @@ def computeGoodD(r_range = R_RANGE):
         with open("good-d.pickle", 'ab') as f_pickle:
             pickle.dump(good_d, f_pickle)
         print("Renaming")
-        rename("good-d.pickle",f"nu-good-d-{i*CHUNK_SIZE}.pickle")
+        rename("good-d.pickle",f"good-d-{i*CHUNK_SIZE}.pickle")
         sys.exit(0)
 
+def computeTail(max_d: int, good_d_bound_a = 2.5, good_d_bound_b = 0.4):
+    assert (good_d_bound_b <= 1 and good_d_bound_b > 0), "The exponent of your bound cannot exceed 1 (and really shouldn't be 1 either)"
+    good_d_bound_a = float(good_d_bound_a)
+    good_d_bound_b = float(good_d_bound_b)
+    max_d = int(max_d)
+    
+    f(x) = BOUND_ON_C_PRIME_D
+    g(x,A,B) = A*x^B*f.diff(x)
+    tail = -numerical_integral(g(x,good_d_bound_a,good_d_bound_b),max_d,infinity)[0]
+    tail *= 1/(gamma(1/2)*zeta(2)**(1/2))
+    print("Tail is", tail)
+    return tail
 
-def loadGoodD(infile: str) -> List[int]:
-    """
-        infile: The input pickle file from which to load, built by computeGoodD
-    """
-    R = []
-    for char in infile:
-        if char.isdigit():
-            R.append(char)
-    R = int(''.join(R))
-    N = R/(CHUNK_SIZE)
+def computeConstant(sign: str, bound: str, good_file, D = 1000, q_range = Q_RANGE, good_d_bound_a = 2.5, good_d_bound_b = 0.4) -> float:
+    assert (sign == 'r' or sign == 'i'), "Sign must be either 'r' (real) or 'i' (imaginary)"
+    assert (bound == 'u' or bound == 'l'), "Bound must be either 'u' (upper) or 'l' (lower)"
 
-    good_d = set()
-    d_count = 0
-    with open(infile, 'rb') as fin:
-        for i in range(N+1):
-            print(i)
-            new_good_d = pickle.load(fin)
-            d_count += len(new_good_d)
-            good_d = union(good_d, new_good_d)
-    print("The number of non-distinct items I loaded is", d_count)
-    print("The number of distinct good d is", len(good_d))
-    good_d = list(good_d).sort()
-    return good_d
-
-
-
-def computeGoodDParallel(r_range = R_RANGE, text_outfile = "", pickle_outfile = "") -> List[int]:
-    """
-        Iterates through all r in [-R_RANGE, R_RANGE] and computes the 
-        set of distinct squarefree parts (see above) of r^3-1728 which appear. 
-        Writes them to a file.
-    """
-    print("Computing good d")
-
-    with open(text_outfile, 'w') as f_txt, open(pickle_outfile, 'wb') as f_pickle:
-        try:
-            good_d = computeGoodDHelper(chain(range(block_size*i, block_size*(i+1)), range(-block_size*(i+1)+1, -block_size*i+1)))
-            good_d = list(set(good_d)).sort()
-
-        except KeyboardInterrupt:
-            print("You interrupted! How rude :<")
-            print("I got up to r = ", r)
-            writeGoodDToFileAndReturnList(good_d, text_outfile, pickle_outfile)
-
-    return writeGoodDToFileAndReturnList(good_d, text_outfile, pickle_outfile)
-
-def computeConstant(sign: str, infile = "good-d.pickle", q_range = Q_RANGE) -> float:
-    assert(sign == 'r' or sign == 'i')
     total = 0.0
+    print("Opening file", good_file)
+    with open(good_file, 'rb') as goodfile:
+        D = min(D, pickle.load(goodfile))
+        good_d = pickle.load(goodfile)
+    
     print("Computing constant")
-    with open(infile, 'rb') as fin:
-        good_d = pickle.load(fin)
     for d in tqdm(good_d):
-        total += computeConstantForD(d,sign,q_range) 
-    print(float(total))
+        if abs(d) < D:
+            total += computeConstantForD(d,sign,q_range) 
+    if bound == 'l':
+        print("Lower bound on constant is", float(total))
+    else:
+        print("Upper bound on constant is", float(total)+computeTail(D, good_d_bound_a, good_d_bound_b))
 
-
-def bridgeSum(d_min: int, d_max: int) -> float:
-    d_min = int(d_min)
-    d_max = int(d_max) 
-    total = 0.0
-    for d in tqdm(range(d_min, d_max+1)):
-        if is_squarefree(d):
-            total += 1/(d*2**(len(factor(d))))
-    print(total)
-
-def refABC(K: int, C: float):
-    K = int(K)
-    C = float(C)
-    eps = (4*sqrt(3)/sqrt(ln(K)*ln(ln(K))))
-    print("k^{1+eps} for eps = ", float(eps))
-    print(f"which is 10^"+str(float(ln(K**(1+eps))/ln(10))))
-
-def testConj(D_FLR = 2500, infile = "good-d.pickle"):
-    with open(infile, 'rb') as fin:
-        good_d = pickle.load(fin)
-    pos_mod_eight = {k:[] for k in range(0,8)}
-    neg_mod_eight = {k:[] for k in range(0,8)}
-    for d in good_d:    
-        if d > 0:
-            pos_mod_eight[d%8].append(d)
-        else:
-            neg_mod_eight[8-d%8].append(d)
-        
-    pos_sum = {k:0.0 for k in range(0,8)}
-    neg_sum = {k:0.0 for k in range(0,8)}
-
-    D_FLR = 2500
-    for k in range(0,8):
-        for d in pos_mod_eight[k]:
-            if d > D_FLR:
-                pos_sum[k] += computeFirstConstant(d,1000)/(d*2**len(factor(d)))
-        for d in neg_mod_eight[k]:
-            if d > D_FLR:
-                neg_sum[k] += computeFirstConstant(d,1000)/(d*2**len(factor(d)))
-
-
-    print([len(pos_mod_eight[k]) for k in range(0,8)])
-    print([len(neg_mod_eight[k]) for k in range(0,8)])
-
-    print([float(pos_sum[k]/pos_sum[2]) for k in range(0,8)])
-    print([float(neg_sum[k]/neg_sum[2]) for k in range(0,8)])
-
-argh.dispatch_commands([computeConstant, evaluateChi, computeGoodD, refABC, bridgeSum, testConj, squarefreePart, loadGoodD])
+argh.dispatch_commands([computeConstant, evaluateChi, computeGoodD, squarefreePartOfMordell, computeTail])

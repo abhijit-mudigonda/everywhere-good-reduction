@@ -8,6 +8,7 @@ def countGoodD(N):
     max_D = 0
     for A in range(1,N):
         C.add(squarefree_part(A**3))
+        """
         if (A % 2 == 0) and ((A % 16 != 0) and (A % 16 != 4)):
             pass
         elif (A % 3 == 0) and (A % 27 != 12):
@@ -16,6 +17,8 @@ def countGoodD(N):
             x = squarefree_part(A**3)
             D.add(x)
             max_D = max(x, max_D)
+        """
+
     """ 
     for x in sorted(list(C)):
         if x in D:
