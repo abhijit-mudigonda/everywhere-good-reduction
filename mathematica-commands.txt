@@ -1,5 +1,0 @@
-f[x_] := Sqrt[48/(Log[x]*Log[Log[x]])] (1+(Log[Log[Log[x]]] + 1.193586795)/(2 Log[Log[x]])) 
-a[x_] := 2/3 + f[x]/3 
-b[x_] := (2 Log[(1+f[x]*Log[x])/(4 Log[1.2]) + 15.2004])/(3 Log[x])
-g[x_] := a[x]-b[x]
-h[x_] := 2*(x^(g[x]-2))*(Sqrt[Log[x]+1/(2 Sqrt[Log[x]])])

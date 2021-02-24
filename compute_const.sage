@@ -9,26 +9,53 @@ class computeConstantForD:
     abs_const = 1/(gamma(1/2)*zeta(2)**(1/2))
 
     def __init__(self, d, sgn, bound, max_q = MAX_Q):
+        """
+            ARGUMENTS
+
+            d: The value of d for which we want the constant
+            sgn: Whether we want real ('r') or imaginary ('i') fields
+            bound: Whether we want an upper or a lower bound
+            max_q: When we compute (an upper or lower bound on) 
+                the product over all q s.t. chi_d(q) = 1 during the 
+                computation of c'_d, we take the terms up to this value of q. 
+                1000 by default, it doesn't seem to change much if it's 
+                increased. 
+
+            INSTANCE VARIABLES
+
+            disc: The fundamental discriminant associated to this d. It will be 
+                d*eps_d if d is odd (this is always 1 mod 4) or 4deps_d if 
+                d is even (this is fine since d is squarefree). 
+            kronecker_d: The Kronecker character of self.disc. 
+            modulus: The modulus of the associated Kronecker character. 
+            d_factors: A list of the factors of d. 
+        """
         self.d = d
         self.sgn = sgn 
         self.bound = bound
         self.max_q = max_q
         eps_d = 1 if d%4 == 1 else -1
         self.disc = d*eps_d if d%2 == 1 else 4*d*eps_d
-        self.kronecker_d = kronecker_character(eps_d*d)
+        self.kronecker_d = kronecker_character(self.disc)
         self.modulus = abs(self.disc)
         self.d_factors = prime_factors(d)
 
     def computeConstant(self):
+        """
+            Computes the final constant.
+            This will be either c'_dc''_{R,d} or c'_dc''_{I,d}
+        """
         return self.computeFirstConstant() * self.computeSecondConstant() / (abs(self.d)*2**(len(self.d_factors)))
 
     def computeFirstConstant(self): 
-            return computeConstantForD.abs_const * self.computeLocalConstant() * self.computeAnnoyingProduct()
+        """
+            Computes c'_d for this value of d. 
+        """
+        return computeConstantForD.abs_const * self.computeLocalConstant() * self.computeAnnoyingProduct()
 
     def computeSecondConstant(self):
         """
-            Compute the constant coming from the rest of the rules of Setzer
-            this is c''_d in the paper
+            Computes c''_{R,d} or c''_{I,d}
         """
         if self.sgn == "r":
             if self.d % 8 == 1 or self.d % 8 == 7:
@@ -65,6 +92,9 @@ class computeConstantForD:
         return sqrt(self.computeLocalProduct() * abs(self.evaluateLSeriesOfChiAtOne()))
 
     def computeLocalProduct(self):
+        """
+            Computes \prod_{q | m} (1+1/q)^{-1/2}
+        """
         local_prod = 1.0
         for fac in self.d_factors:
             local_prod *= (fac/(fac+1))
@@ -72,7 +102,10 @@ class computeConstantForD:
 
     def evaluateLSeriesOfChiAtOne(self):
         """
-            Computes the value of L(1, chi_d)
+            Computes the value of L(1, chi_d), using a formula
+            of Dirichlet for evaluating the L-series of a 
+            real quadratic character at 1. We adjust if chi_d 
+            is not a Kronecker symbol (i.e. when d is \pm 3 mod 8)
         """
         def evaluateLSeriesOfKroneckerAtOne():
             """
@@ -99,6 +132,18 @@ class computeConstantForD:
             return evaluateLSeriesOfKroneckerAtOne()
 
     def computeAnnoyingProduct(self):
+        """
+            Computes a bound on the product of (1-q^{-2}) 
+            over all primes q for which chi_d(q) = 1. 
+
+            For an upper bound, it takes all the terms for
+            primes up to q_max, since each term is at most 1. 
+
+            For a lower bound, it starts with 1/zeta(2) 
+            (as if all primes were in the product) and then
+            removes primes up to q_max for which chi_d(q) != 1
+        """
+
         if self.bound == 'u':
             return self.computeAnnoyingProductUB()
         else:
@@ -143,7 +188,17 @@ class computeConstantForD:
                     
     
 def computeTail(max_d, a = 2.5, b = 0.4):
-    f(x) = (1+((euler_gamma+ln(4))/log(x)) + ((euler_gamma)*ln(4)/((log(x))^2)))*(sqrt(log(x))/(2*x))
+    """
+        Compute an upper bound on the sum of c'_dc''_d/(|d|2^{w(d)}). 
+
+        c'_d is at most 1/(Gamma(1/2)zeta(2)^{1/2}) * |L(1,chi_d)|^{1/2}.
+        We upper bound the latter using P\'olya-Vinogradov (we could do 
+        better 
+
+        2^{w(d)} is at least 2, hence the 2 in the denominator of f(x)
+
+    """
+    f(x) = sqrt((1/2)*log(4*x)+log(log(4*x))+1/(2*sqrt(4*x)*log(4*x))+2+euler_gamma)/(2*x)
     g(x,A,B) = A*x^B*f.diff(x)
     tail = -numerical_integral(g(x,a,b),max_d,infinity)[0]
     tail *= computeConstantForD.abs_const
@@ -151,22 +206,32 @@ def computeTail(max_d, a = 2.5, b = 0.4):
     return tail
 
 def computeConstant(signature, bound, good_file, max_d = 10**32, max_q = MAX_Q, a = 2.5, b = 0.4):
+    """
+        signature: Whether we want real ('r') or imaginary ('i') fields
+        bound: Whether we want an upper or a lower bound
+        good_file: Where to fetch data from
+        max_d: If bound is 'u', how far up to compute before we bound the tail.
+        max_q: When we compute (an upper or lower bound on) 
+            the product of (1-q^{-2}) over all q s.t. chi_d(q) = 1 during the 
+            computation of c'_d, we take the terms up to this value of q. 
+            It doesn't seem to change much if it's increased beyond 1000.
+        a: The leading coefficient in our power law upper bound on number of good d up to D
+        b: The exponent in our power law upper bound on number of good d up to D
+
+        Computes an upper or lower bound on c_R or c_I, based on the values
+        of signature and bound. 
+
+    """
+
     assert (signature == 'r' or signature == 'i'), "Signature must be either 'r' (real) or 'i' (imaginary)"
     assert (bound == 'u' or bound == 'l'), "Bound must be either 'u' (upper) or 'l' (lower)"
 
-
-    """
-    print("Counting lines")
-    with open(good_file, 'r') as goodfile:
-        num_good_d = sum(1 for line in goodfile)
-    print("The number of good d is", num_good_d)
-    """
-
     print("Finding largest d")
     with open(good_file, 'r') as goodfile:
-        d = max_d
+        file_max_d = 1
         for line in goodfile:
-            max_d = max(int(line), max_d)
+            file_max_d = max(abs(int(line)), max_d)
+    max_d = min(max_d, file_max_d)
     print("I will take d up to", max_d)
 
     print("Computing constant")
@@ -185,6 +250,10 @@ def computeConstant(signature, bound, good_file, max_d = 10**32, max_q = MAX_Q, 
         print("Upper bound on constant is", N(total+computeTail(max_d, a, b)))
 
 class TestComputeConstantForD(unittest.TestCase): 
+    """
+        For now, just has a bunch of examples for which to compute the 
+        various things
+    """
     def test_2ru12(self):
         test_input = (2,'r','u',12)
         expected = {
@@ -277,7 +346,10 @@ class TestComputeConstantForD(unittest.TestCase):
         for key in expected.keys():
             self.assertEqual(actual[key], expected[key], key)
 
-def runTests():
+#TO TEST, UNCOMMENT THIS BLOCK
+"""
+if __name__ == "__main__":
     unittest.main()
+"""
 
 argh.dispatch_commands([computeConstant])
