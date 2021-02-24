@@ -10,7 +10,7 @@ D_RANGE = 6000
 Q_RANGE = 1000
 CHUNK_SIZE = 500000
 
-def makeLowerBoundGoodD(infile: str, outfile = "lb-good-d.pickle") -> List[int]:
+def makeLowerBoundGoodD(infile: str, outfile = "lb-good-d.txt") -> List[int]:
     """
         infile: The input pickle file from which to load, built by computeGoodD
     """
@@ -22,20 +22,112 @@ def makeLowerBoundGoodD(infile: str, outfile = "lb-good-d.pickle") -> List[int]:
     N = R/(CHUNK_SIZE)
 
     good_d = []
-    with open(infile, 'rb') as fin, open(outfile, 'wb') as fout:
-        print("Total number I need to get through is", 125)
-        for i in range(100):
+    with open(infile, 'rb') as fin, open(outfile, 'w') as fout:
+        print("Total number I need to get through is", 80)
+        for i in range(80):
             print("Chunk", i)
             new_good_d = pickle.load(fin)
             good_d.extend(list(new_good_d))
         print("Making it a set")
-        good_d = set(good_d)
+        good_d = list(set(good_d))
         print("The number of distinct good d is", len(good_d))
-        good_d = list(good_d).sort()
-        pickle.dump(R, fout)
-        pickle.dump(good_d, fout)
+        print("Sorting")
+        good_d.sort()
+        print("Writing")
+        for d in tqdm(good_d):
+            fout.write(str(d)+'\n')
+        
+
+        
 
 
+
+def squarefreePartOfMordell(r: int) -> int:
+    """
+        Computes the squarefree part of f(r) = r^3-1728. 
+        The squarefree part of an integer n is the unique squarefree d such that n = dt^2
+
+        Since f(r) = (r-12)(r^2+12r+144) we factor these two separately to improve runtime
+    """
+    F_1 = factor(r-12)
+    F_2 = factor(r**2+12*r+144)
+    d = 1
+    e_2 = 0
+    e_3 = 0
+    for (pp, e) in chain(F_1,F_2):
+        if pp == 2:
+            e_2 += e
+        elif pp == 3:
+            e_3 += e
+        elif e%2:
+            d *= pp
+    if e_2 % 2:
+        d *= 2
+    if e_3 % 2:
+        d *= 3
+    if r < 12:
+        d = -d
+    return d
+
+
+def writeGoodDToFileAndReturnList(good_d: Set[int], text_outfile: str, pickle_outfile: str) -> List[int]:
+    good_d = list(good_d)
+    good_d.sort()
+    print("The number of good d is: ", len(good_d))
+
+    if text_outfile == "":
+        text_outfile = f"good-d-{r_range}.txt"
+    if pickle_outfile == "":
+        pickle_outfile = f"good-d-{r_range}.pickle"
+
+        print("Writing text output file")
+        for d in tqdm(good_d):
+            f.write(f"{d}\n")
+        f.flush()
+    with open(pickle_outfile, 'wb') as f:
+        print("Writing pickle output file")
+        pickle.dump(good_d, f)
+
+    return good_d
+
+def iterator(x):
+    for i in range(x):
+        yield i
+
+def computeGoodD(r_range = R_RANGE):
+    """
+        Iterates through all r in [-r_RANGE, r_RANGE] and computes the 
+        set of distinct squarefree parts (see above) of r^3-1728 which appear. 
+        Writes them to a file.
+    """
+
+    print("Computing good d")
+    d_count = 0 #Upper bound on the number of good d
+    try:
+        with open("good-d.pickle", 'ab') as f_pickle:
+            for i in range(ceil(R_RANGE/CHUNK_SIZE)):
+                print("i is: ", i)
+                good_d = set()
+                for r in tqdm(chain(range(CHUNK_SIZE*i, CHUNK_SIZE*(i+1)), range(-CHUNK_SIZE*(i+1)+1, -CHUNK_SIZE*i+1))):
+                    if not ((r % 2 == 0) and (r % 16 != 0)  and (r % 16 != 4)):
+                        if not ((r % 3 == 0) and (r % 27 != 12)):
+                            d = squarefreePartOfMordell(r)
+                            if d != 0:
+                                good_d.add(d)
+                d_count += len(good_d)
+                print("Writing to file, do not interrupt")
+                pickle.dump(good_d, f_pickle)
+    except KeyboardInterrupt:
+        print("You interrupted! How rude :<")
+        print("I got up to |r| at least", i*CHUNK_SIZE)
+        print("The number of good d so far is at most", d_count+len(good_d))
+
+        print("Dumping")
+        with open("good-d.pickle", 'ab') as f_pickle:
+            pickle.dump(good_d, f_pickle)
+        print("Renaming")
+        rename("good-d.pickle",f"good-d-{i*CHUNK_SIZE}.pickle")
+        sys.exit(0)
 
 #@parallel(12)
 def computeGoodDHelper(r: int, fout: TextIO, mode: int):
@@ -135,3 +227,4 @@ def testConj(D_FLR = 2500, infile = "good-d.pickle"):
     print([float(pos_sum[k]/pos_sum[2]) for k in range(0,8)])
     print([float(neg_sum[k]/neg_sum[2]) for k in range(0,8)])
 
+argh.dispatch_commands([makeUpperBoundGoodD, makeLowerBoundGoodD])
