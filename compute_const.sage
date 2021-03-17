@@ -1,20 +1,18 @@
 import argh
 from tqdm import tqdm
-import pickle
 import unittest
+import itertools
 
 MAX_Q = 1000
 
 class computeConstantForD: 
     abs_const = 1/(gamma(1/2)*zeta(2)**(1/2))
 
-    def __init__(self, d, sgn, bound, max_q = MAX_Q):
+    def __init__(self, d, max_q = MAX_Q):
         """
             ARGUMENTS
 
             d: The value of d for which we want the constant
-            sgn: Whether we want real ('r') or imaginary ('i') fields
-            bound: Whether we want an upper or a lower bound
             max_q: When we compute (an upper or lower bound on) 
                 the product over all q s.t. chi_d(q) = 1 during the 
                 computation of c'_d, we take the terms up to this value of q. 
@@ -31,8 +29,6 @@ class computeConstantForD:
             d_factors: A list of the factors of d. 
         """
         self.d = d
-        self.sgn = sgn 
-        self.bound = bound
         self.max_q = max_q
         eps_d = 1 if d%4 == 1 else -1
         self.disc = d*eps_d if d%2 == 1 else 4*d*eps_d
@@ -42,48 +38,63 @@ class computeConstantForD:
 
     def computeConstant(self):
         """
-            Computes the final constant.
-            This will be either c'_dc''_{R,d} or c'_dc''_{I,d}
+            Returns a list of 
+            [lower bound on c_R, upper bound on c_R,
+            lower bound on c_I, upper bound on c_I]
         """
-        return self.computeFirstConstant() * self.computeSecondConstant() / (abs(self.d)*2**(len(self.d_factors)))
-
+        prod_of_constants = [tup[0] * tup[1] for tup in itertools.product(self.computeSecondConstant(), self.computeFirstConstant())]
+        return [x / (abs(self.d)*2**(len(self.d_factors))) for x in prod_of_constants]
+        
     def computeFirstConstant(self): 
         """
-            Computes c'_d for this value of d. 
+            Returns a lower and upper bound on c'_d for this value of d. 
+            Comes from Corollary 4.9 of the paper. 
         """
-        return computeConstantForD.abs_const * self.computeLocalConstant() * self.computeAnnoyingProduct()
+        x = computeConstantForD.abs_const * self.computeLocalConstant() 
+        annoying_product_lb, annoying_product_ub = self.computeAnnoyingProduct()
+        return x * annoying_product_lb, x * annoying_product_ub
 
     def computeSecondConstant(self):
         """
-            Computes c''_{R,d} or c''_{I,d}
+            Returns c''_{d,R} and c''_{d,I})
+            Comes from Lemma 5.1 of the paper. 
+
         """
-        if self.sgn == "r":
-            if self.d % 8 == 1 or self.d % 8 == 7:
-                return 11/12
-            elif self.d % 8 == 3 or self.d % 8 == 5:
-                if self.d > 0:
-                    return 2/3
-                else:
-                    return 1/6
-            elif self.d % 8 == 6:
-                return 1/8
-            elif self.d % 8 == 2 and self.d > 0:
-                return 1/8
-            else:
-                return 0
+        return self.computeSecondRealConstant(), self.computeSecondImaginaryConstant()
+            
+    def computeSecondRealConstant(self):
+        """
+            Computes c''_{d,R}
+        """
+
+        if self.d % 8 == 1 or self.d % 8 == 7:
+            return 1
+        elif self.d % 8 == 3 or self.d % 8 == 5:
+            return 2/3
+        elif self.d % 8 == 6:
+            return 1/4
+        elif self.d % 8 == 2 and self.d > 0:
+            return 1/4
         else:
-            if self.d % 8 == 1 and self.d > 0:
-                return 11/12
-            elif self.d % 8 == 7 and self.d < 0:
-                return 11/12
-            elif self.d % 8 == 3 and self.d < 0:
-                return 1/6
-            elif self.d % 8 == 5 and self.d > 0:
-                return 2/3
-            elif (self.d % 8 == 2 or self.d % 8 == 6) and self.d < 0:
-                return 1/8
-            else:
-                return 0
+            return 0
+    
+    def computeSecondImaginaryConstant(self):
+        """
+            Computes c''_{d,I}
+        """
+
+        if self.d % 8 == 1 and self.d > 0:
+            return 1
+        elif self.d % 8 == 7 and self.d < 0:
+            return 1
+        elif self.d % 8 == 3 and self.d < 0:
+            return 2/3
+        elif self.d % 8 == 5 and self.d > 0:
+            return 2/3
+        elif (self.d % 8 == 2 or self.d % 8 == 6) and self.d < 0:
+            return 1/4
+        else:
+            return 0
 
     def computeLocalConstant(self):
         """
@@ -106,11 +117,14 @@ class computeConstantForD:
             of Dirichlet for evaluating the L-series of a 
             real quadratic character at 1. We adjust if chi_d 
             is not a Kronecker symbol (i.e. when d is \pm 3 mod 8)
+            as per Lemma 4.4(ii).  
         """
         def evaluateLSeriesOfKroneckerAtOne():
             """
                 Computes the value at 1 of the L series of the Kronecker symbol 
                 with top value eps_d * d 
+
+                Comes from Theorem 7.5 of the paper. 
             """
 
             if self.disc < 0:
@@ -127,29 +141,27 @@ class computeConstantForD:
                 return ans * int_sum
         
         if (self.d % 8 == 3 or self.d % 8 == 5):
-            return (1/3)*evaluateLSeriesOfKroneckerAtOne()
+            return 3*evaluateLSeriesOfKroneckerAtOne()
         else:
             return evaluateLSeriesOfKroneckerAtOne()
 
     def computeAnnoyingProduct(self):
         """
             Computes a bound on the product of (1-q^{-2}) 
-            over all primes q for which chi_d(q) = 1. 
+            over all primes q for which chi_d(q) = 1.
 
-            For an upper bound, it takes all the terms for
-            primes up to q_max, since each term is at most 1. 
-
-            For a lower bound, it starts with 1/zeta(2) 
-            (as if all primes were in the product) and then
-            removes primes up to q_max for which chi_d(q) != 1
+            Follows Equation 28 of the paper. 
         """
 
-        if self.bound == 'u':
-            return self.computeAnnoyingProductUB()
-        else:
-            return self.computeAnnoyingProductLB()
+        return self.computeAnnoyingProductLB(), self.computeAnnoyingProductUB()
+
 
     def computeAnnoyingProductUB(self):
+        """
+            For an upper bound, it takes all the terms for
+            primes up to q_max, since each term is at most 1. 
+        """
+
         prod = 1
         for p in primes(self.max_q): 
             if self.kronecker_d(p) == 1:
@@ -161,6 +173,12 @@ class computeConstantForD:
         return sqrt(prod)
 
     def computeAnnoyingProductLB(self):
+        """
+            For a lower bound, it starts with 1/zeta(2) 
+            (as if all primes were in the product) and then
+            removes primes up to q_max for which chi_d(q) != 1
+        """
+
         prod = 1/zeta(2)
         for p in primes(self.max_q): 
             if self.kronecker_d(p) != 1:
@@ -183,32 +201,50 @@ class computeConstantForD:
                 "local": self.computeLocalProduct(),
                 "l_series_at_one": self.evaluateLSeriesOfChiAtOne(),
                 "annoying": self.computeAnnoyingProduct(),
-                "second_const": self.computeSecondConstant()
+                "second_const": self.computeSecondConstant(),
                 }
                     
     
-def computeTail(max_d, a = 2.5, b = 0.4):
+def computeTail(neg_max_d, pos_max_d, a, b):
     """
-        Compute an upper bound on the sum of c'_dc''_d/(|d|2^{w(d)}). 
+        neg_max_d: The good d in input file include all the negative good 
+            values of d which are at least neg_max_d.
+        pos_max_d: The good d in input file include all the pos good 
+            values of d which are at most pos_max_d.
 
+        Compute an upper bound on the sum of c'_dc''_d/(|d|2^{w(d)}). 
         c'_d is at most 1/(Gamma(1/2)zeta(2)^{1/2}) * |L(1,chi_d)|^{1/2}.
         We upper bound the latter using P\'olya-Vinogradov (we could do 
-        better 
+        better with work of Pintz, but we don't need to for now). 
+        The formula comes from Corollary 7.7 of the paper, and a proof
+        is in the comments of the LaTeX source. 
 
         2^{w(d)} is at least 2, hence the 2 in the denominator of f(x)
-
     """
+    a = QQ(a)
+    b = QQ(b)
     f(x) = sqrt((1/2)*log(4*x)+log(log(4*x))+1/(2*sqrt(4*x)*log(4*x))+2+euler_gamma)/(2*x)
+    #These next two lines carry out integration by parts of the Stieljes integral
+    #associated to the tail.
     g(x,A,B) = A*x^B*f.diff(x)
-    tail = -numerical_integral(g(x,a,b),max_d,infinity)[0]
+
+    pos_tail = f(pos_max_d)*a*(pos_max_d)^b
+    pos_integral = numerical_integral(g(x,a,b),pos_max_d,Infinity)
+    pos_tail += (-1)*pos_integral[0] + abs(pos_integral[1])
+
+    neg_max_d *= -1
+    neg_tail = f(neg_max_d)*a*(neg_max_d)^b
+    neg_integral = numerical_integral(g(x,a,b),neg_max_d,Infinity)
+    neg_tail += (-1)*neg_integral[0] + abs(neg_integral[1])
+    
+    tail = pos_tail + neg_tail
     tail *= computeConstantForD.abs_const
-    print("Tail is", N(tail))
+    tail = N(tail)
+    print("Contribution from d <", neg_max_d, "and d >", pos_max_d, "is at most", tail)
     return tail
 
-def computeConstant(signature, bound, good_file, max_d = 10**32, max_q = MAX_Q, a = 2.5, b = 0.4):
+def computeConstant(good_file = "data/good-d.txt", neg_max_d = -10000, pos_max_d = 50000, max_q = MAX_Q, a = 5, b = 0.35):
     """
-        signature: Whether we want real ('r') or imaginary ('i') fields
-        bound: Whether we want an upper or a lower bound
         good_file: Where to fetch data from
         max_d: If bound is 'u', how far up to compute before we bound the tail.
         max_q: When we compute (an upper or lower bound on) 
@@ -223,69 +259,88 @@ def computeConstant(signature, bound, good_file, max_d = 10**32, max_q = MAX_Q, 
 
     """
 
-    assert (signature == 'r' or signature == 'i'), "Signature must be either 'r' (real) or 'i' (imaginary)"
-    assert (bound == 'u' or bound == 'l'), "Bound must be either 'u' (upper) or 'l' (lower)"
-
-    print("Finding largest d")
     with open(good_file, 'r') as goodfile:
-        file_max_d = 1
+        num_d = 0
         for line in goodfile:
-            file_max_d = max(abs(int(line)), max_d)
-    max_d = min(max_d, file_max_d)
-    print("I will take d up to", max_d)
+            num_d += 1
+        print("The number of good d in this file is", num_d)
+        print("I will take d in between", neg_max_d, "and", pos_max_d)
 
     print("Computing constant")
-    total = 0
+    total = [0,0,0,0]
     with open(good_file, 'r') as goodfile:
-        for line in goodfile:
+        for line in tqdm(goodfile, total=int(num_d)):
             d = int(line)
-            if abs(d) < max_d:
-                total += computeConstantForD(d, signature, bound, max_q).computeConstant()
+            d_contributions = computeConstantForD(d, max_q).computeConstant()
+            for i in range(4):
+                total[i] += d_contributions[i]
     
-    if bound == 'l':
-        print("Lower bound on constant is", float(total))
-    else:
-        total = N(total)
-        print("Computed sum is", total)
-        print("Upper bound on constant is", N(total+computeTail(max_d, a, b)))
+    tail = computeTail(neg_max_d, pos_max_d, a, b)
+    print("c_R is at least", N(total[0]), "and is at most", N(total[1] + tail))
+    print("c_I is at least", N(total[2]), "and is at most", N(total[3] + tail))
 
+"""
+===========================================================================
+TESTS
+===========================================================================
+"""
+
+def runTests():
+    suite = unittest.defaultTestLoader.loadTestsFromTestCase(
+            TestComputeConstantForD)
+    unittest.TextTestRunner().run(suite)
+
+    
 class TestComputeConstantForD(unittest.TestCase): 
     """
         For now, just has a bunch of examples for which to compute the 
         various things
+
+        The proper way to do this is probably to have a different test for each 
+        key in the expected dict.
     """
+
+    l_idx = 0
+    u_idx = 1
+    r_idx = 0
+    i_idx = 1
+
     def test_2ru12(self):
-        test_input = (2,'r','u',12)
+        test_input = (2,12)
         expected = {
             "disc": -8,
             "modulus": 8, 
             "local": 2/3,
             "l_series_at_one": -(pi/pow(8,3/2))*(1 + 3 - 5 - 7),
             "annoying": sqrt((8/9)*(120/121)),
-            "second_const": 1/8,
+            "second_const": 1/4,
         }
         actual = computeConstantForD(*test_input).returnTestDict()
+        actual["annoying"] = actual["annoying"][self.u_idx]
+        actual["second_const"] = actual["second_const"][self.r_idx]
         for key in expected.keys():
             self.assertEqual(actual[key], expected[key], key)
 
     def test_minus7rl14(self):
-        test_input = (-7,'r','l',14)
+        test_input = (-7,14)
         expected = {
             "disc": -7,
             "modulus": 7,
             "local": 7/8,
             "l_series_at_one": -(pi/pow(7,3/2))*(1 + 2 - 3 + 4 - 5 - 6),
             "annoying": sqrt((1/zeta(2))*(9/8)*(25/24)*(49/48)*(169/168)),
-            "second_const": 11/12
+            "second_const": 1
         }
 
         actual = computeConstantForD(*test_input).returnTestDict()
+        actual["annoying"] = actual["annoying"][self.l_idx]
+        actual["second_const"] = actual["second_const"][self.r_idx]
         for key in expected.keys():
             self.assertEqual(actual[key], expected[key], key)
 
 
     def test_7iu5(self):
-        test_input = (7,'i','u',5)
+        test_input = (7,5)
         expected = {
             "disc": -7,
             "modulus": 7,
@@ -296,28 +351,34 @@ class TestComputeConstantForD(unittest.TestCase):
         }
 
         actual = computeConstantForD(*test_input).returnTestDict()
+        actual["annoying"] = actual["annoying"][self.u_idx]
+        actual["second_const"] = actual["second_const"][self.i_idx]
+
         for key in expected.keys():
             self.assertEqual(actual[key], expected[key], key)
 
 
     def test_5ru10(self):
-        test_input = (5,'r','u',10)
+        test_input = (5,10)
         expected = {
             "disc": 5,
             "modulus": 5,
             "local": 5/6,
-            "l_series_at_one": -(1/3)*(1/pow(5,1/2))*(log(sin(pi*1/5)) - log(sin(pi*2/5)) - log(sin(pi*3/5)) + log(sin(pi*4/5))),
+            "l_series_at_one": -3*(1/pow(5,1/2))*(log(sin(pi*1/5)) - log(sin(pi*2/5)) - log(sin(pi*3/5)) + log(sin(pi*4/5))),
             "annoying": sqrt(3/4),
             "second_const": 2/3
         }
         
         actual = computeConstantForD(*test_input).returnTestDict()
+        actual["annoying"] = actual["annoying"][self.u_idx]
+        actual["second_const"] = actual["second_const"][self.r_idx]
+
         for key in expected.keys():
             self.assertEqual(actual[key], expected[key], key)
 
 
     def test_15il15(self):
-        test_input = (15,'i','l',15)
+        test_input = (15,15)
         expected = {
             "disc": -15,
             "modulus": 15,
@@ -328,11 +389,14 @@ class TestComputeConstantForD(unittest.TestCase):
         }
 
         actual = computeConstantForD(*test_input).returnTestDict()
+        actual["annoying"] = actual["annoying"][self.l_idx]
+        actual["second_const"] = actual["second_const"][self.i_idx]
+
         for key in expected.keys():
             self.assertEqual(actual[key], expected[key], key)
 
     def test_minus6ru3(self):
-        test_input = (-6,'r','u',3)
+        test_input = (-6,3)
         expected = {
             "disc": 24,
             "modulus": 24,
@@ -343,13 +407,11 @@ class TestComputeConstantForD(unittest.TestCase):
         }
 
         actual = computeConstantForD(*test_input).returnTestDict()
+        actual["annoying"] = actual["annoying"][self.u_idx]
+        actual["second_const"] = actual["second_const"][self.r_idx]
+
         for key in expected.keys():
             self.assertEqual(actual[key], expected[key], key)
 
-#TO TEST, UNCOMMENT THIS BLOCK
-"""
-if __name__ == "__main__":
-    unittest.main()
-"""
 
-argh.dispatch_commands([computeConstant])
+argh.dispatch_commands([computeConstant, computeTail, runTests])
