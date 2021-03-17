@@ -8,13 +8,16 @@ In order to obtain the numerical bounds in Corollary D and Corollary E of the pa
 `sage compute_const.sage computeConstant`
 3. To run unit tests, run `sage compute_const.sage runTests`
 
-##Other stuff
 
 To compute upper and lower bounds on the constant in Theorem 7.3, run 
 `sage kappa.sage`
 
-To compute
 
+To compute a list of good d, run `sage datagen/good-ds/compute-good-ds.sage`
+
+##Other stuff
+
+If you are curious about any of the other code in this repository, please feel free to look around or contact us! It's largely various snippets which we used in the course of writing the paper, and touches on some future directions mentioned in the paper. 
 
 
 
