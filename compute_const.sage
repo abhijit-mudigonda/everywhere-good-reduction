@@ -414,4 +414,4 @@ class TestComputeConstantForD(unittest.TestCase):
             self.assertEqual(actual[key], expected[key], key)
 
 
-argh.dispatch_commands([computeConstant, computeTail, runTests])
+argh.dispatch_commands([computeConstant, runTests])
