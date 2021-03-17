@@ -226,7 +226,7 @@ def computeTail(neg_max_d, pos_max_d, a, b):
     f(x) = sqrt((1/2)*log(4*x)+log(log(4*x))+1/(2*sqrt(4*x)*log(4*x))+2+euler_gamma)/(2*x)
     #These next two lines carry out integration by parts of the Stieljes integral
     #associated to the tail.
-    g(x,A,B) = A*x^B*f.diff(x)
+    g(x,A,B) = (1/2)*A*x^B*f.diff(x)
 
     pos_tail = f(pos_max_d)*a*(pos_max_d)^b
     pos_integral = numerical_integral(g(x,a,b),pos_max_d,Infinity)
