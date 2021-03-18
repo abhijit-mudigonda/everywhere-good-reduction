@@ -1,4 +1,4 @@
-This repository contains code associated to the paper _Quadratic Fields Admitting Elliptic Curves with Rational j-Invariant and Good Reduction Everywhere_, by [Benjamin Matschke](https://math.bu.edu/people/matschke/) and [Abhijit Mudigonda](https://abhijit-mudigonda.github.io/math/). 
+This repository contains code associated to the paper [_Quadratic Fields Admitting Elliptic Curves with Rational j-Invariant and Good Reduction Everywhere_](https://arxiv.org/pdf/2103.09814.pdf), by [Benjamin Matschke](https://math.bu.edu/people/matschke/) and [Abhijit Mudigonda](https://abhijit-mudigonda.github.io/math/). 
 
 ## Quickstart
 
